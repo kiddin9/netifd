@@ -2013,84 +2013,6 @@ system_set_ethtool_eee_settings(struct device *dev, struct device_settings *s)
 }
 
 static void
-system_set_ethtool_settings(struct device *dev, struct device_settings *s)
-{
-	struct {
-		struct ethtool_link_settings req;
-		__u32 link_mode_data[3 * 127];
-	} ecmd;
-	struct ifreq ifr = {
-		.ifr_data = (caddr_t)&ecmd,
-	};
-	size_t i;
-	__s8 nwords;
-	__u32 *supported, *advertising;
-
-	system_set_ethtool_pause(dev, s);
-
-	if (s->flags & DEV_OPT_EEE)
-		system_set_ethtool_eee_settings(dev, s);
-
-	memset(&ecmd, 0, sizeof(ecmd));
-	ecmd.req.cmd = ETHTOOL_GLINKSETTINGS;
-	strncpy(ifr.ifr_name, dev->ifname, sizeof(ifr.ifr_name) - 1);
-
-	if (ioctl(sock_ioctl, SIOCETHTOOL, &ifr) < 0 ||
-	    ecmd.req.link_mode_masks_nwords >= 0 ||
-	    ecmd.req.cmd != ETHTOOL_GLINKSETTINGS)
-		return;
-
-	ecmd.req.link_mode_masks_nwords = -ecmd.req.link_mode_masks_nwords;
-
-	if (ioctl(sock_ioctl, SIOCETHTOOL, &ifr) < 0 ||
-	    ecmd.req.link_mode_masks_nwords <= 0 ||
-	    ecmd.req.cmd != ETHTOOL_GLINKSETTINGS)
-		return;
-
-	nwords = ecmd.req.link_mode_masks_nwords;
-	supported = &ecmd.link_mode_data[0];
-	advertising = &ecmd.link_mode_data[nwords];
-	memcpy(advertising, supported, sizeof(__u32) * nwords);
-
-	for (i = 0; i < ARRAY_SIZE(ethtool_modes); i++) {
-		if (s->flags & DEV_OPT_DUPLEX) {
-			if (s->duplex)
-				ethtool_link_mode_clear_bit(nwords, ethtool_modes[i].bit_half, advertising);
-			else
-				ethtool_link_mode_clear_bit(nwords, ethtool_modes[i].bit_full, advertising);
-		}
-		if (!(s->flags & DEV_OPT_SPEED) ||
-		    s->speed == ethtool_modes[i].speed)
-			continue;
-
-		ethtool_link_mode_clear_bit(nwords, ethtool_modes[i].bit_full, advertising);
-		ethtool_link_mode_clear_bit(nwords, ethtool_modes[i].bit_half, advertising);
-	}
-
-	if (s->flags & DEV_OPT_PAUSE)
-		if (!s->pause)
-			ethtool_link_mode_clear_bit(nwords, ETHTOOL_LINK_MODE_Pause_BIT, advertising);
-
-	if (s->flags & DEV_OPT_ASYM_PAUSE)
-		if (!s->asym_pause)
-			ethtool_link_mode_clear_bit(nwords, ETHTOOL_LINK_MODE_Asym_Pause_BIT, advertising);
-
-	if (s->flags & DEV_OPT_AUTONEG) {
-		ecmd.req.autoneg = s->autoneg ? AUTONEG_ENABLE : AUTONEG_DISABLE;
-		if (!s->autoneg) {
-			if (s->flags & DEV_OPT_SPEED)
-				ecmd.req.speed = s->speed;
-
-			if (s->flags & DEV_OPT_DUPLEX)
-				ecmd.req.duplex = s->duplex ? DUPLEX_FULL : DUPLEX_HALF;
-		}
-	}
-
-	ecmd.req.cmd = ETHTOOL_SLINKSETTINGS;
-	ioctl(sock_ioctl, SIOCETHTOOL, &ifr);
-}
-
-static void
 system_set_ethtool_settings_after_up(struct device *dev, struct device_settings *s)
 {
 	if (s->flags & DEV_OPT_GRO)
@@ -2345,7 +2267,6 @@ system_if_apply_settings(struct device *dev, struct device_settings *s, uint64_t
 		system_set_drop_unsolicited_na(dev, s->drop_unsolicited_na ? "1" : "0");
 	if (apply_mask & DEV_OPT_ARP_ACCEPT)
 		system_set_arp_accept(dev, s->arp_accept ? "1" : "0");
-	system_set_ethtool_settings(dev, s);
 }
 
 void system_if_apply_settings_after_up(struct device *dev, struct device_settings *s)
