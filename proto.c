@@ -413,7 +413,7 @@ proto_apply_static_ip_settings(struct interface *iface, struct blob_attr *attr)
 	struct blob_attr *tb[__OPT_MAX];
 	struct blob_attr *cur;
 	const char *error;
-	unsigned int netmask = 32;
+	unsigned int netmask = 24;
 	bool ip6deprecated;
 	int n_v4 = 0, n_v6 = 0;
 	struct in_addr bcast = {0,}, ptp = {0,};
